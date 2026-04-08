@@ -56,9 +56,9 @@ func defaultConfig() *Config {
 			ActivationThreshold: 0.5,
 			SampleRate:          16000,
 		},
-		STT: STTConfig{Provider: "deepgram", Model: "nova-2"},
-		LLM: LLMConfig{Provider: "openai", Model: "gpt-4o-mini"},
-		TTS: TTSConfig{Provider: "elevenlabs", SampleRate: 24000},
+		STT:           STTConfig{Provider: "deepgram", Model: "nova-2"},
+		LLM:           LLMConfig{Provider: "openai", Model: "gpt-4o-mini"},
+		TTS:           TTSConfig{Provider: "elevenlabs", SampleRate: 24000, VoiceName: "21m00Tcm4TlvDq8ikWAM", Model: "eleven_turbo_v2_5"},
 		TurnDetection: TurnDetectionConfig{Use: "vad"},
 		CallPolicy: CallPolicyConfig{
 			MaxDurationSec: 300,
@@ -74,7 +74,7 @@ func defaultConfig() *Config {
 
 // overlayEnv overrides string fields from environment variables.
 func overlayEnv(cfg *Config) {
-	if v := os.Getenv("AGENT_NAME"); v != "" {
+	if v, ok := os.LookupEnv("AGENT_NAME"); ok {
 		cfg.AgentName = v
 	}
 	if v := os.Getenv("LIVEKIT_URL"); v != "" {

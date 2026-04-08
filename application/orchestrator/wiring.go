@@ -2,7 +2,6 @@ package orchestrator
 
 import (
 	"fmt"
-	"log"
 	"os"
 
 	"go-agent-worker/infrastructure/config"
@@ -26,33 +25,40 @@ import (
 
 func newSTT(cfg config.STTConfig) (stt.STT, error) {
 	switch cfg.Provider {
+	case "openai":
+		apiKey := os.Getenv("OPENAI_API_KEY")
+		openaiSTT := openaiAdapter.NewOpenAISTT(apiKey, cfg.Model)
+		internalVAD := coreVAD.NewSimpleVAD(0.0005)
+		return stt.NewStreamAdapter(openaiSTT, internalVAD), nil
 	case "deepgram":
-		return deepgramAdapter.NewDeepgramSTT(os.Getenv("DEEPGRAM_API_KEY"), cfg.Model), nil
+		apiKey := os.Getenv("DEEPGRAM_API_KEY")
+		return deepgramAdapter.NewDeepgramSTT(apiKey, cfg.Model), nil
 	case "google":
-		return googleAdapter.NewGoogleSTT(os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
+		credentialsFile := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+		return googleAdapter.NewGoogleSTT(credentialsFile)
 	default:
 		return nil, fmt.Errorf("unsupported STT provider: %s", cfg.Provider)
 	}
 }
 
 func newLLM(cfg config.LLMConfig) (llm.LLM, error) {
-	log.Println("newLLM with provider:", cfg.Provider) // Debug log to check provider value
 	switch cfg.Provider {
 	case "openai":
-		return openaiAdapter.NewOpenAILLM(os.Getenv("OPENAI_API_KEY"), cfg.Model), nil
+		apiKey := os.Getenv("OPENAI_API_KEY")
+		return openaiAdapter.NewOpenAILLM(apiKey, cfg.Model), nil
 	case "google":
-		return googleAdapter.NewGoogleLLM(os.Getenv("GOOGLE_API_KEY"), cfg.Model)
+		apiKey := os.Getenv("GOOGLE_API_KEY")
+		return googleAdapter.NewGoogleLLM(apiKey, cfg.Model)
 	case "anthropic":
-		return anthropicAdapter.NewAnthropicLLM(os.Getenv("ANTHROPIC_API_KEY"), cfg.Model)
+		apiKey := os.Getenv("ANTHROPIC_API_KEY")
+		return anthropicAdapter.NewAnthropicLLM(apiKey, cfg.Model)
 	case "groq":
-		return groqAdapter.NewGroqLLM(os.Getenv("GROQ_API_KEY"), cfg.Model), nil
+		apiKey := os.Getenv("GROQ_API_KEY")
+		return groqAdapter.NewGroqLLM(apiKey, cfg.Model), nil
 	case "azure":
-		// Azure uses OpenAI-compatible API with custom base URL
-		return openaiAdapter.NewOpenAILLMWithBaseURL(
-			os.Getenv("AZURE_OPENAI_API_KEY"),
-			cfg.Model,
-			os.Getenv("AZURE_OPENAI_ENDPOINT"),
-		), nil
+		apiKey := os.Getenv("AZURE_OPENAI_API_KEY")
+		endpoint := os.Getenv("AZURE_OPENAI_ENDPOINT")
+		return openaiAdapter.NewOpenAILLMWithBaseURL(apiKey, cfg.Model, endpoint), nil
 	default:
 		return nil, fmt.Errorf("unsupported LLM provider: %s", cfg.Provider)
 	}
@@ -61,12 +67,10 @@ func newLLM(cfg config.LLMConfig) (llm.LLM, error) {
 func newTTS(cfg config.TTSConfig) (tts.TTS, error) {
 	switch cfg.Provider {
 	case "elevenlabs":
-		return elevenlabsAdapter.NewElevenLabsTTS(
-			os.Getenv("ELEVENLABS_API_KEY"),
-			cfg.VoiceName,
-			cfg.Model,
-		)
+		apiKey := os.Getenv("ELEVENLABS_API_KEY")
+		return elevenlabsAdapter.NewElevenLabsTTS(apiKey, cfg.VoiceName, cfg.Model)
 	case "openai":
+		apiKey := os.Getenv("OPENAI_API_KEY")
 		model := goopenai.TTSModel1
 		if cfg.Model != "" {
 			model = goopenai.SpeechModel(cfg.Model)
@@ -75,15 +79,14 @@ func newTTS(cfg config.TTSConfig) (tts.TTS, error) {
 		if cfg.VoiceName != "" {
 			voice = goopenai.SpeechVoice(cfg.VoiceName)
 		}
-		return openaiAdapter.NewOpenAITTS(os.Getenv("OPENAI_API_KEY"), model, voice), nil
+		return openaiAdapter.NewOpenAITTS(apiKey, model, voice), nil
 	case "google":
-		return googleAdapter.NewGoogleTTS(os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
+		credentialsFile := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+		return googleAdapter.NewGoogleTTS(credentialsFile)
 	case "azure":
-		return azureAdapter.NewAzureTTS(
-			os.Getenv("AZURE_SPEECH_KEY"),
-			os.Getenv("AZURE_SPEECH_REGION"),
-			cfg.VoiceName,
-		), nil
+		speechKey := os.Getenv("AZURE_SPEECH_KEY")
+		speechRegion := os.Getenv("AZURE_SPEECH_REGION")
+		return azureAdapter.NewAzureTTS(speechKey, speechRegion, cfg.VoiceName), nil
 	default:
 		return nil, fmt.Errorf("unsupported TTS provider: %s", cfg.Provider)
 	}
