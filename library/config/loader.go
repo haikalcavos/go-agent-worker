@@ -69,6 +69,11 @@ func defaultConfig() *Config {
 				ReminderMessage:     "Are you still there?",
 			},
 		},
+		Censorship: CensorshipConfig{
+			Patterns:        []string{""},
+			Replacement:     "[redacted]",
+			MatchWholeWords: false,
+		},
 	}
 }
 

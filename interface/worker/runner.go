@@ -2,11 +2,14 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strings"
 
+	"go-agent-worker/adapter/censoring"
 	"go-agent-worker/adapter/provider"
 	"go-agent-worker/core/callsession"
+	"go-agent-worker/core/censorship"
 	"go-agent-worker/library/config"
 
 	"github.com/cavos-io/conversation-worker/core/agent"
@@ -47,6 +50,29 @@ func Run(jobCtx *worker.JobContext) error {
 	if err != nil {
 		log.Error("failed to initialize VAD provider", "err", err)
 		return err
+	}
+
+	// --- Build censorship service (optional) ---
+	var censorService *censorship.Service
+	fmt.Println("censorship patterns:", cfg.Censorship.Patterns, len(cfg.Censorship.Patterns))
+	if len(cfg.Censorship.Patterns) > 0 {
+		cs, err := censorship.New(
+			cfg.Censorship.Patterns,
+			cfg.Censorship.Replacement,
+			cfg.Censorship.MatchWholeWords,
+		)
+		if err != nil {
+			log.Error("failed to create censorship service", "err", err)
+		} else {
+			censorService = cs
+			log.Info("censorship service enabled", "patterns", len(cfg.Censorship.Patterns))
+		}
+	}
+
+	// --- Wrap TTS with censorship filter (if enabled) ---
+	if censorService != nil {
+		ttsProvider = censoring.NewTTSWrapper(ttsProvider, censorService)
+		log.Info("TTS censorship wrapper applied")
 	}
 
 	// --- Build chat context with system prompt ---
@@ -137,8 +163,12 @@ func Run(jobCtx *worker.JobContext) error {
 	log.Info("agent session started")
 
 	// --- Greet the caller ---
-	if cfg.Greeting != "" {
-		if err := session.GenerateReply(context.Background(), cfg.Greeting); err != nil {
+	greeting := cfg.Greeting
+	if censorService != nil && greeting != "" {
+		greeting = censorService.ApplyRules(greeting)
+	}
+	if greeting != "" {
+		if err := session.GenerateReply(context.Background(), greeting); err != nil {
 			log.Warn("failed to send greeting", "err", err)
 		}
 	}

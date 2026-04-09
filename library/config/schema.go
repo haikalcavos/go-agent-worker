@@ -27,6 +27,7 @@ type Config struct {
 	CallPolicy        CallPolicyConfig        `json:"call_policy"`
 	Recording         RecordingConfig         `json:"recording"`
 	NoiseCancellation NoiseCancellationConfig `json:"noise_cancellation"`
+	Censorship        CensorshipConfig        `json:"censorship"`
 }
 
 type VADConfig struct {
@@ -82,4 +83,10 @@ type RecordingConfig struct {
 
 type NoiseCancellationConfig struct {
 	Provider string `json:"provider"`
+}
+
+type CensorshipConfig struct {
+	Patterns        []string `json:"patterns"`
+	Replacement     string   `json:"replacement"`
+	MatchWholeWords bool     `json:"match_whole_words"`
 }
