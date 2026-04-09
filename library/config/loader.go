@@ -86,5 +86,5 @@ func overlayEnv(cfg *Config) {
 	if v := os.Getenv("LIVEKIT_API_SECRET"); v != "" {
 		cfg.LiveKitAPISecret = v
 	}
-	// Provider API keys are read directly by the wiring layer via os.Getenv
+	// Provider API keys are read directly by the adapter layer via os.Getenv
 }

@@ -1,2 +1,4 @@
 sa.json
 configuration.json
+.env
+.vscode/

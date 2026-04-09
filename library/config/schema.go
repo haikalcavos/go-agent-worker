@@ -23,14 +23,14 @@ type Config struct {
 	TTS TTSConfig `json:"tts"`
 
 	// Session behaviour
-	TurnDetection    TurnDetectionConfig    `json:"turn_detection"`
-	CallPolicy       CallPolicyConfig       `json:"call_policy"`
-	Recording        RecordingConfig        `json:"recording"`
+	TurnDetection     TurnDetectionConfig     `json:"turn_detection"`
+	CallPolicy        CallPolicyConfig        `json:"call_policy"`
+	Recording         RecordingConfig         `json:"recording"`
 	NoiseCancellation NoiseCancellationConfig `json:"noise_cancellation"`
 }
 
 type VADConfig struct {
-	Provider            string  `json:"provider"`              // "silero" | "simple"
+	Provider            string  `json:"provider"`             // "silero" | "simple"
 	MinSpeechDuration   float64 `json:"min_speech_duration"`
 	MinSilenceDuration  float64 `json:"min_silence_duration"`
 	ActivationThreshold float64 `json:"activation_threshold"`
@@ -52,7 +52,7 @@ type LLMConfig struct {
 }
 
 type TTSConfig struct {
-	Provider   string `json:"provider"`    // "google" | "elevenlabs" | "azure" | ...
+	Provider   string `json:"provider"`   // "google" | "elevenlabs" | "azure" | ...
 	VoiceName  string `json:"voice_name"`
 	Model      string `json:"model"`
 	SampleRate int    `json:"sample_rate"`
@@ -68,10 +68,10 @@ type CallPolicyConfig struct {
 }
 
 type IdlePolicy struct {
-	ReminderEnabled      bool   `json:"reminder_enabled"`
-	ReminderAfterSec     int    `json:"reminder_after_sec"`
-	TerminationAfterSec  int    `json:"termination_after_sec"`
-	ReminderMessage      string `json:"reminder_message"`
+	ReminderEnabled     bool   `json:"reminder_enabled"`
+	ReminderAfterSec    int    `json:"reminder_after_sec"`
+	TerminationAfterSec int    `json:"termination_after_sec"`
+	ReminderMessage     string `json:"reminder_message"`
 }
 
 type RecordingConfig struct {

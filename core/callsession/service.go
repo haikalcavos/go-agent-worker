@@ -8,9 +8,9 @@ import (
 type Status string
 
 const (
-	StatusPending  Status = "pending"
-	StatusActive   Status = "active"
-	StatusEnded    Status = "ended"
+	StatusPending Status = "pending"
+	StatusActive  Status = "active"
+	StatusEnded   Status = "ended"
 )
 
 // CallSession is the root aggregate for a single voice call.

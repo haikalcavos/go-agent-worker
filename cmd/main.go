@@ -1,18 +1,20 @@
 package main
 
 import (
-	"go-agent-worker/infrastructure/bootstrap"
-	"go-agent-worker/application/orchestrator"
+	"go-agent-worker/library/config"
+	"log"
+
+	agentworker "go-agent-worker/interface/worker"
 
 	"github.com/cavos-io/conversation-worker/interface/cli"
 	"github.com/cavos-io/conversation-worker/interface/worker"
 )
 
 func main() {
-	// Initialize logging, OTEL, heartbeat
-	bootstrap.Init()
+	// Initialize logging, load .env and configuration.json
+	InitApp()
 
-	cfg := bootstrap.Config()
+	cfg := config.Get()
 
 	server := worker.NewAgentServer(worker.WorkerOptions{
 		AgentName: cfg.AgentName,
@@ -21,7 +23,14 @@ func main() {
 		APISecret: cfg.LiveKitAPISecret,
 	})
 
-	server.RTCSession(orchestrator.Run, nil, nil)
+	log.Printf("%+v", worker.WorkerOptions{
+		AgentName: cfg.AgentName,
+		WSRL:      cfg.LiveKitURL,
+		APIKey:    cfg.LiveKitAPIKey,
+		APISecret: cfg.LiveKitAPISecret,
+	})
+
+	server.RTCSession(agentworker.Run, nil, nil)
 
 	cli.RunApp(server)
 }

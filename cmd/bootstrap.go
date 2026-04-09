@@ -1,18 +1,17 @@
-package bootstrap
+package main
 
 import (
 	"log/slog"
 	"os"
 
-	"go-agent-worker/infrastructure/config"
+	"go-agent-worker/library/config"
 
 	"github.com/joho/godotenv"
 )
 
-// Init sets up logging and loads configuration.
+// InitApp sets up logging and loads configuration.
 // Call once at the start of main().
-func Init() {
-
+func InitApp() {
 	// Load .env file
 	godotenv.Load()
 
@@ -29,11 +28,6 @@ func Init() {
 	}
 
 	slog.Info("agent-worker started", "agent", config.Get().AgentName)
-}
-
-// Config is a convenience accessor for the loaded config.
-func Config() *config.Config {
-	return config.Get()
 }
 
 func setupLogging() {

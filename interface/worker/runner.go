@@ -1,12 +1,13 @@
-package orchestrator
+package worker
 
 import (
 	"context"
 	"log/slog"
 	"strings"
 
-	"go-agent-worker/domain/callsession"
-	"go-agent-worker/infrastructure/config"
+	"go-agent-worker/adapter/provider"
+	"go-agent-worker/core/callsession"
+	"go-agent-worker/library/config"
 
 	"github.com/cavos-io/conversation-worker/core/agent"
 	"github.com/cavos-io/conversation-worker/core/llm"
@@ -24,25 +25,25 @@ func Run(jobCtx *worker.JobContext) error {
 	log.Info("orchestrator started")
 
 	// --- Build providers from config ---
-	sttProvider, err := newSTT(cfg.STT)
+	sttProvider, err := provider.NewSTT(cfg.STT)
 	if err != nil {
 		log.Error("failed to initialize STT provider", "err", err)
 		return err
 	}
 
-	llmProvider, err := newLLM(cfg.LLM)
+	llmProvider, err := provider.NewLLM(cfg.LLM)
 	if err != nil {
 		log.Error("failed to initialize LLM provider", "err", err)
 		return err
 	}
 
-	ttsProvider, err := newTTS(cfg.TTS)
+	ttsProvider, err := provider.NewTTS(cfg.TTS)
 	if err != nil {
 		log.Error("failed to initialize TTS provider", "err", err)
 		return err
 	}
 
-	vadProvider, err := newVAD(cfg.VAD)
+	vadProvider, err := provider.NewVAD(cfg.VAD)
 	if err != nil {
 		log.Error("failed to initialize VAD provider", "err", err)
 		return err
