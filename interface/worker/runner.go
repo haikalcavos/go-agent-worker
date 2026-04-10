@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"go-agent-worker/adapter/censoring"
 	"go-agent-worker/adapter/provider"
@@ -163,14 +164,61 @@ func Run(jobCtx *worker.JobContext) error {
 	log.Info("agent session started")
 
 	// --- Greet the caller ---
+	// CRITICAL: Wait longer for full pipeline initialization
+	// The audio pipeline needs time for:
+	// 1. VAD to initialize
+	// 2. Audio track to be published
+	// 3. Queue processing goroutines to start
+	// 4. TTS provider to be ready
+	log.Info("waiting for audio pipeline to be fully ready...")
+	time.Sleep(10 * time.Second) // Increased from 500ms to 1.5s
+
 	greeting := cfg.Greeting
+	log.Info("preparing greeting", "original", greeting)
+
 	if censorService != nil && greeting != "" {
 		greeting = censorService.ApplyRules(greeting)
+		log.Info("greeting after censorship", "final", greeting)
 	}
+
 	if greeting != "" {
-		if err := session.GenerateReply(context.Background(), greeting); err != nil {
-			log.Warn("failed to send greeting", "err", err)
+		log.Info("sending greeting to user", "text", greeting)
+
+		// Try to send greeting with retry logic
+		// since GenerateReply is async and may fail if timing is off
+		maxRetries := 3
+		var lastErr error
+
+		for attempt := 1; attempt <= maxRetries; attempt++ {
+			greetCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+
+			log.Info("attempting to send greeting", "attempt", attempt, "max", maxRetries)
+			err := session.GenerateReply(greetCtx, greeting)
+
+			cancel()
+
+			if err != nil {
+				lastErr = err
+				log.Warn("greeting send attempt failed", "attempt", attempt, "err", err)
+
+				// Wait before retry - gives async pipeline more time
+				if attempt < maxRetries {
+					time.Sleep(500 * time.Millisecond)
+				}
+			} else {
+				log.Info("greeting scheduled successfully", "attempt", attempt)
+				// GenerateReply is async, so wait a bit for it to process
+				// This gives the pipeline time to actually send the audio
+				time.Sleep(1000 * time.Millisecond)
+				break
+			}
 		}
+
+		if lastErr != nil && maxRetries > 0 {
+			log.Error("failed to send greeting after retries", "err", lastErr, "text", greeting, "attempts", maxRetries)
+		}
+	} else {
+		log.Warn("greeting is empty, skipping greeting")
 	}
 
 	// --- Block until room disconnects ---
