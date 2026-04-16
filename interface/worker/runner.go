@@ -22,7 +22,10 @@ import (
 
 // Run is the entrypoint called by AgentServer for each incoming job.
 // It wires the full STT→LLM→TTS pipeline and starts the conversation.
-func Run(jobCtx *worker.JobContext) error {
+func Run(server *worker.AgentServer, jobCtx *worker.JobContext) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	cfg := config.Get()
 	log := slog.With("jobId", jobCtx.Job.Id, "room", jobCtx.Job.Room.Name)
 
@@ -96,56 +99,54 @@ func Run(jobCtx *worker.JobContext) error {
 	a.MinEndpointingDelay = 0.5
 	a.MaxEndpointingDelay = 3.0
 
-	// --- Connect to LiveKit room ---
-	// Buffer early track subscriptions that arrive before RoomIO is ready.
-	// Without this, audio tracks from the user are lost during the Connect→RoomIO
-	// window, causing the agent to never hear the user.
-	type earlyTrack struct {
-		track *webrtc.TrackRemote
-		pub   *lksdk.RemoteTrackPublication
-		rp    *lksdk.RemoteParticipant
-	}
-	var earlyTracks []earlyTrack
-	var roomIO *worker.RoomIO
-
-	disconnectCh := make(chan struct{})
-	cb := lksdk.NewRoomCallback()
-	cb.OnDisconnected = func() { close(disconnectCh) }
-	cb.OnTrackSubscribed = func(track *webrtc.TrackRemote, pub *lksdk.RemoteTrackPublication, rp *lksdk.RemoteParticipant) {
-		log.Info("track subscribed", "participant", string(rp.Identity()), "kind", track.Kind().String())
-		if roomIO != nil {
-			roomIO.GetCallback().OnTrackSubscribed(track, pub, rp)
-		} else {
-			log.Info("buffering early track")
-			earlyTracks = append(earlyTracks, earlyTrack{track, pub, rp})
-		}
-	}
-
-	if err := jobCtx.Connect(context.Background(), cb); err != nil {
-		log.Error("failed to connect to room", "err", err)
-		return err
-	}
-	log.Info("connected to room")
-
 	// --- Create agent session ---
-	session := agent.NewAgentSession(a, jobCtx.Room, agent.AgentSessionOptions{
+	session := agent.NewAgentSession(a, nil, agent.AgentSessionOptions{
 		AllowInterruptions:  true,
 		MinEndpointingDelay: 0.5,
 		MaxEndpointingDelay: 3.0,
 	})
 	session.ChatCtx = chatCtx
 
-	// --- Wire audio I/O and replay buffered tracks ---
-	roomIO = worker.NewRoomIO(jobCtx.Room, session, worker.RoomOptions{})
+	// --- Register session with server (for console UI) ---
+	server.SetConsoleSession(session)
 
-	if len(earlyTracks) > 0 {
-		log.Info("replaying buffered tracks", "count", len(earlyTracks))
-		for _, et := range earlyTracks {
-			roomIO.GetCallback().OnTrackSubscribed(et.track, et.pub, et.rp)
+	// --- Connect to LiveKit room ---
+	// Callbacks delegate through a closure that reads the eventual *RoomIO
+	// once it is assigned after Connect returns.
+	var rio *worker.RoomIO
+	cb := lksdk.NewRoomCallback()
+	cb.OnDisconnected = func() { cancel() }
+	cb.OnTrackSubscribed = func(track *webrtc.TrackRemote, pub *lksdk.RemoteTrackPublication, rp *lksdk.RemoteParticipant) {
+		log.Info("track subscribed", "participant", string(rp.Identity()), "kind", track.Kind().String())
+		if rio == nil {
+			return
 		}
+		rio.GetCallback().OnTrackSubscribed(track, pub, rp)
+	}
+	cb.OnTrackUnsubscribed = func(track *webrtc.TrackRemote, pub *lksdk.RemoteTrackPublication, rp *lksdk.RemoteParticipant) {
+		if rio == nil {
+			return
+		}
+		rio.GetCallback().OnTrackUnsubscribed(track, pub, rp)
+	}
+	cb.OnParticipantDisconnected = func(rp *lksdk.RemoteParticipant) {
+		if rio == nil {
+			return
+		}
+		rio.GetCallback().OnParticipantDisconnected(rp)
 	}
 
-	if err := roomIO.Start(context.Background()); err != nil {
+	if err := jobCtx.Connect(ctx, cb); err != nil {
+		log.Error("failed to connect to room", "err", err)
+		return err
+	}
+	log.Info("connected to room")
+
+	// --- Wire audio I/O ---
+	rio = worker.NewRoomIO(jobCtx.Room, session, worker.RoomOptions{})
+	defer rio.Close()
+
+	if err := rio.Start(ctx); err != nil {
 		log.Error("failed to start RoomIO", "err", err)
 		return err
 	}
@@ -157,72 +158,51 @@ func Run(jobCtx *worker.JobContext) error {
 	defer cs.End()
 
 	// --- Start pipeline ---
-	if err := session.Start(context.Background()); err != nil {
+	if err := session.Start(ctx); err != nil {
 		log.Error("failed to start agent session", "err", err)
 		return err
 	}
 	log.Info("agent session started")
 
 	// --- Greet the caller ---
-	// CRITICAL: Wait longer for full pipeline initialization
-	// The audio pipeline needs time for:
-	// 1. VAD to initialize
-	// 2. Audio track to be published
-	// 3. Queue processing goroutines to start
-	// 4. TTS provider to be ready
+	// Wait for the full audio pipeline to be ready before sending greeting.
 	log.Info("waiting for audio pipeline to be fully ready...")
-	time.Sleep(10 * time.Second) // Increased from 500ms to 1.5s
+	time.Sleep(10 * time.Second)
 
 	greeting := cfg.Greeting
-	log.Info("preparing greeting", "original", greeting)
-
 	if censorService != nil && greeting != "" {
 		greeting = censorService.ApplyRules(greeting)
-		log.Info("greeting after censorship", "final", greeting)
 	}
 
-	if greeting != "" {
-		log.Info("sending greeting to user", "text", greeting)
+	// if greeting != "" {
+	// 	log.Info("sending greeting", "text", greeting)
 
-		// Try to send greeting with retry logic
-		// since GenerateReply is async and may fail if timing is off
-		maxRetries := 3
-		var lastErr error
+	// 	maxRetries := 3
+	// 	var lastErr error
+	// 	for attempt := 1; attempt <= maxRetries; attempt++ {
+	// 		greetCtx, greetCancel := context.WithTimeout(ctx, 30*time.Second)
+	// 		_, lastErr = session.GenerateReply(greetCtx, greeting, false)
+	// 		greetCancel()
 
-		for attempt := 1; attempt <= maxRetries; attempt++ {
-			greetCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// 		if lastErr == nil {
+	// 			log.Info("greeting scheduled", "attempt", attempt)
+	// 			time.Sleep(1000 * time.Millisecond)
+	// 			break
+	// 		}
+	// 		log.Warn("greeting attempt failed", "attempt", attempt, "err", lastErr)
+	// 		if attempt < maxRetries {
+	// 			time.Sleep(500 * time.Millisecond)
+	// 		}
+	// 	}
+	// 	if lastErr != nil {
+	// 		log.Error("failed to send greeting after retries", "err", lastErr, "attempts", maxRetries)
+	// 	}
+	// } else {
+	// 	log.Warn("greeting is empty, skipping")
+	// }
 
-			log.Info("attempting to send greeting", "attempt", attempt, "max", maxRetries)
-			err := session.GenerateReply(greetCtx, greeting)
-
-			cancel()
-
-			if err != nil {
-				lastErr = err
-				log.Warn("greeting send attempt failed", "attempt", attempt, "err", err)
-
-				// Wait before retry - gives async pipeline more time
-				if attempt < maxRetries {
-					time.Sleep(500 * time.Millisecond)
-				}
-			} else {
-				log.Info("greeting scheduled successfully", "attempt", attempt)
-				// GenerateReply is async, so wait a bit for it to process
-				// This gives the pipeline time to actually send the audio
-				time.Sleep(1000 * time.Millisecond)
-				break
-			}
-		}
-
-		if lastErr != nil && maxRetries > 0 {
-			log.Error("failed to send greeting after retries", "err", lastErr, "text", greeting, "attempts", maxRetries)
-		}
-	} else {
-		log.Warn("greeting is empty, skipping greeting")
-	}
-
-	// --- Block until room disconnects ---
-	<-disconnectCh
+	// --- Block until room disconnects (cancel() is called by OnDisconnected) ---
+	<-ctx.Done()
 
 	log.Info("session ended", "duration_sec", cs.DurationSec())
 	return nil

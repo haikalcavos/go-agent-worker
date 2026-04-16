@@ -5,8 +5,8 @@ import (
 
 	"go-agent-worker/library/config"
 
-	"github.com/cavos-io/conversation-worker/core/stt"
 	googleAdapter "github.com/cavos-io/conversation-worker/adapter/google"
+	"github.com/cavos-io/conversation-worker/core/stt"
 )
 
 func NewSTT(cfg config.STTConfig) (stt.STT, error) {

@@ -3,8 +3,8 @@ package silero
 import (
 	"go-agent-worker/library/config"
 
-	coreVAD "github.com/cavos-io/conversation-worker/core/vad"
 	sileroVADAdapter "github.com/cavos-io/conversation-worker/adapter/silero_vad"
+	coreVAD "github.com/cavos-io/conversation-worker/core/vad"
 )
 
 func NewVAD(cfg config.VADConfig) (coreVAD.VAD, error) {

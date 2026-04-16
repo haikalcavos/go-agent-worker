@@ -30,7 +30,9 @@ func main() {
 		APISecret: cfg.LiveKitAPISecret,
 	})
 
-	server.RTCSession(agentworker.Run, nil, nil)
+	server.RTCSession(func(jobCtx *worker.JobContext) error {
+		return agentworker.Run(server, jobCtx)
+	}, nil, nil)
 
 	cli.RunApp(server)
 }

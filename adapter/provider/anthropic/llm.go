@@ -5,8 +5,8 @@ import (
 
 	"go-agent-worker/library/config"
 
-	"github.com/cavos-io/conversation-worker/core/llm"
 	anthropicAdapter "github.com/cavos-io/conversation-worker/adapter/anthropic"
+	"github.com/cavos-io/conversation-worker/core/llm"
 )
 
 func NewLLM(cfg config.LLMConfig) (llm.LLM, error) {

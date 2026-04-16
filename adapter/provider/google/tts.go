@@ -5,8 +5,8 @@ import (
 
 	"go-agent-worker/library/config"
 
-	"github.com/cavos-io/conversation-worker/core/tts"
 	googleAdapter "github.com/cavos-io/conversation-worker/adapter/google"
+	"github.com/cavos-io/conversation-worker/core/tts"
 )
 
 func NewTTS(cfg config.TTSConfig) (tts.TTS, error) {

@@ -2,7 +2,6 @@ package censoring
 
 import (
 	"context"
-	"log"
 	"strings"
 
 	"go-agent-worker/core/censorship"
@@ -68,7 +67,6 @@ type censoringStream struct {
 // PushText accumulates text until a sentence boundary is found, then applies censorship
 // and forwards the complete sentence. This ensures multi-word patterns can be matched correctly.
 func (s *censoringStream) PushText(text string) error {
-	log.Println("Push Text=============================")
 	s.buf.WriteString(text)
 
 	// Look for sentence boundary (., !, ?, \n followed by space or end-of-string)
